@@ -27,7 +27,8 @@ static uint16_t _wdtTimers[4];      // The time when each channel is reset
 static uint16_t _wdtTimeouts[4];    // The timeout time for each channel that'll trigger a relay break.
 static uint16_t _wdtWarning[4];     // The leds will start flashing rappidly at this time
 static uint16_t _wdtNotify[4];      // The leds will indicate at this threashold
-static volatile uint16_t _wdtTimer; // Global watchdog timer
+static uint16_t _wdtPowerCycleTimeout;  // If no input has arrived on any channels, a complete power cycle is performed
+static volatile uint16_t _wdtTimer;     // Global watchdog timer
 static volatile uint8_t _partialTimer;  // Runs at 16 ticks per second, or 32 ticks per wdt timer tick
 
 ISR(TIMER0_OVF_vect)
@@ -65,7 +66,7 @@ void setup()
 
     // Relay drivers
     PORTC = 0x00;
-    //DDRC = 0x0F;
+    DDRC = 0x0F;
 
     // Watchdog inputs
     PCMSK2 |= _BV(PCINT20) | _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23);
@@ -79,11 +80,17 @@ void setup()
     _wdtTimer = 0;
     _partialTimer = 0;
 
+    _wdtTimeouts[0] = 30*12; // 12h - media converter
+    _wdtTimeouts[1] = 30*12; // 12h - router
+    _wdtTimeouts[2] = 30*24; // 24h - raspberry (reset circuit)
+    _wdtTimeouts[3] = 30*6;  //  6h - camera
+
+    _wdtPowerCycleTimeout = 30*25;
+
     // Watchdog timeouts
     for (uint8_t i=0 ; i < 4 ; i ++) {
-        _wdtTimeouts[i] = 30;     // 60/2*60*12
-        _wdtWarning[i] = 15;
-        _wdtNotify[i] = 10;
+        _wdtWarning[i] = _wdtTimeouts[i]-30*5;  // 5 minutes before power cycle
+        _wdtNotify[i] = 30*5;       // 5 minutes after last reset
         _wdtTimers[i] = 0;
     }
 
@@ -95,9 +102,13 @@ void setup()
 
 void loop()
 {
+    uint16_t maxTimespan = 0;
     for (uint8_t i=0 ; i < 4 ; i ++)
     {
         uint16_t timespan = _wdtTimer - _wdtTimers[i];
+        if (timespan > maxTimespan)
+            maxTimespan = timespan;
+
         if (timespan > _wdtTimeouts[i]) {
             // reset relays
             PORTB |= 1 << i;
@@ -127,6 +138,25 @@ void loop()
         }
         else {
             PORTB &= ~(1 << i);
+        }
+    }
+
+    if (maxTimespan > _wdtPowerCycleTimeout) {
+        for (uint8_t i=0 ; i < 4 ; i ++) {
+            PORTB |= 1 << i;
+            PORTC |= 1 << i;
+            _delay_ms(250);
+            _delay_ms(250);
+            PORTC = 0x00;
+            PORTB &= ~(1 << i);
+            // Give each device 1 minute to boot
+            for (uint8_t j=0 ; j < 60*4 ; j ++) {
+                _delay_ms(250);
+            }
+        }
+
+        for (uint8_t i=0 ; i < 4 ; i ++) {
+            _wdtTimers[i] = _wdtTimer;
         }
     }
 }
