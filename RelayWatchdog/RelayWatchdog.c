@@ -80,10 +80,10 @@ void setup()
     _wdtTimer = 0;
     _partialTimer = 0;
 
-    _wdtTimeouts[0] = 30*12; // 12h - media converter
-    _wdtTimeouts[1] = 30*12; // 12h - router
-    _wdtTimeouts[2] = 30*24; // 24h - raspberry (reset circuit)
-    _wdtTimeouts[3] = 30*6;  //  6h - camera
+    _wdtTimeouts[0] = 30*60*12; // 12h - media converter
+    _wdtTimeouts[1] = 30*60*12; // 12h - router
+    _wdtTimeouts[2] = 30*60*24; // 24h - raspberry (reset circuit)
+    _wdtTimeouts[3] = 30*60*6;  //  6h - camera
 
     _wdtPowerCycleTimeout = 30*25;
 
